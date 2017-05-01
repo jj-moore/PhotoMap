@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#3F51B5</color>
+    <color name="colorPrimaryDark">#303F9F</color>
+    <color name="colorAccent">#FF4081</color>
+    <color name="text_color">#FFF</color>
+    <color name="app_background">#000</color>
+    <color name="photo_border_start">#000</color>
+    <color name="photo_border_center">#12CA22</color>
+    <color name="photo_border_end">#000</color>
+    <color name="map_border_start">#000</color>
+    <color name="map_border_center">#EDC954</color>
+    <color name="map_border_end">#000</color>
+</resources>

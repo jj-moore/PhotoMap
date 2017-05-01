@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/option_take_photo"
+        android:title="@string/option_take_photo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/option_add_photo"
+        android:title="@string/option_add_photo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/option_save_location"
+        android:title="@string/option_save_location"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/option_toggle_view"
+        android:title="@string/option_toggle_view"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/set_preferences"
+        android:title="@string/option_set_preferences"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/option_delete"
+        android:title="@string/option_delete"
+        app:showAsAction="never" />
+
+</menu>
