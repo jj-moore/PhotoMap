@@ -2,122 +2,38 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="20dp">
 
-    <LinearLayout
-        android:layout_width="wrap_content"
+    <CheckBox
+        android:id="@+id/check_animate"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="20dp">
+        android:layout_marginBottom="10dp"
+        android:text="@string/preference_animate"
+        android:textSize="20sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="20dp"
-            android:text="@string/preference_lite_mode"
-            android:textSize="20sp" />
-
-        <RadioGroup
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <RadioButton
-                android:id="@+id/lite_mode_on"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingEnd="30dp"
-                android:text="@string/preference_on"
-                android:textSize="20sp" />
-
-            <RadioButton
-                android:id="@+id/lite_mode_off"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/preference_off"
-                android:textSize="20sp" />
-        </RadioGroup>
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="wrap_content"
+    <CheckBox
+        android:id="@+id/check_buildings"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="20dp">
+        android:layout_marginBottom="10dp"
+        android:text="@string/preference_buildings"
+        android:textSize="20sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="20dp"
-            android:text="@string/preference_animate"
-            android:textSize="20sp" />
-
-        <RadioGroup
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <RadioButton
-                android:id="@+id/animate_map_on"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingEnd="30dp"
-                android:text="@string/preference_on"
-                android:textSize="20sp" />
-
-            <RadioButton
-                android:id="@+id/animate_map_off"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/preference_off"
-                android:textSize="20sp" />
-        </RadioGroup>
-
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="wrap_content"
+    <CheckBox
+        android:id="@+id/check_lite_mode"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="20dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="20dp"
-            android:text="@string/preference_buildings"
-            android:textSize="20sp" />
-
-        <RadioGroup
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <RadioButton
-                android:id="@+id/show_buildings_on"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingEnd="30dp"
-                android:text="@string/preference_on"
-                android:textSize="20sp" />
-
-            <RadioButton
-                android:id="@+id/show_buildings_off"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/preference_off"
-                android:textSize="20sp" />
-        </RadioGroup>
-
-    </LinearLayout>
+        android:layout_marginBottom="10dp"
+        android:text="@string/preference_lite_mode"
+        android:textSize="20sp" />
 
     <Button
         android:id="@+id/save_preferences"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="20dp"
-        android:layout_marginStart="20dp"
+        android:layout_gravity="center"
         android:padding="20dp"
         android:text="@string/preference_save"
         android:textSize="20sp" />

@@ -3,9 +3,9 @@
     <string name="title_activity_maps">PhotoMap</string>
     <string name="option_take_photo">Take Photo</string>
     <string name="option_add_photo">Add Photo</string>
-    <string name="option_save_location">Save Record</string>
+    <string name="option_save_location">Save Map Position</string>
     <string name="option_toggle_view">Set Map Type</string>
-    <string name="option_set_preferences">Set Map Preferences</string>
+    <string name="option_set_preferences">Set Global Preferences</string>
     <string name="option_delete">Delete Current Record</string>
     <string name="photo_index">Showing %1$d of %2$d</string>
     <string name="search_notes">Enter search string or notes</string>
@@ -16,6 +16,4 @@
     <string name="preference_animate">Animate Camera</string>
     <string name="preference_buildings">Show Buildings</string>
     <string name="preference_save">Save Preferences</string>
-    <string name="preference_on">On</string>
-    <string name="preference_off">Off</string>
 </resources>

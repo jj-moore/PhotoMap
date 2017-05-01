@@ -129,6 +129,13 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
     // TO DO: CLEAR APP CACHE
     public void onDestroy() {
         bitmapCache.evictAll();
+        File cache = getCacheDir();
+        for (File file : cache.listFiles()) {
+            if (file.isFile()) {
+                Log.d("Jeremy", "onDestroy: " + file.getName() + " " + file.getTotalSpace());
+                deleteFile(file.getName());
+            }
+        }
         super.onDestroy();
     }
 
@@ -439,7 +446,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
             image.setImageBitmap(bitmap);
         }
 
-        // GET NEXT PHOTO AND PUT IN CACHE
+        // GET NEXT PHOTO AND PUT IN CACHE IF NOT ALREADY THERE
         if ((arrayIndex + 1) < idList.size()) {
             Cursor cursor = dbManager.query(new String[]{"uri"}, "id=" + (arrayIndex + 1));
             if (cursor.moveToFirst()) {

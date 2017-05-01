@@ -38,12 +38,16 @@ class DatabaseManager {
         CursorLoader loader = new CursorLoader(activity, DATABASE_URI, columns, where, null, "id");
         Cursor cursor = loader.loadInBackground();
         if (cursor.moveToFirst()) {
-            activityInterface.databaseToView("QUERY", 1, cursor.getString(1), cursor.getString(8));
-            if (cursor.isNull(2)) {
-                activityInterface.databaseToMap(0, 0, 0, 0, 0, 1, false);
+            if (cursor.isNull(1)) {
+                activityInterface.removeDeletedRecord();
             } else {
-                activityInterface.databaseToMap(cursor.getDouble(2), cursor.getDouble(3), cursor.getFloat(4),
-                        cursor.getFloat(5), cursor.getFloat(6), cursor.getInt(7), true);
+                activityInterface.databaseToView("QUERY", 1, cursor.getString(1), cursor.getString(8));
+                if (cursor.isNull(2)) {
+                    activityInterface.databaseToMap(0, 0, 0, 0, 0, 1, false);
+                } else {
+                    activityInterface.databaseToMap(cursor.getDouble(2), cursor.getDouble(3), cursor.getFloat(4),
+                            cursor.getFloat(5), cursor.getFloat(6), cursor.getInt(7), true);
+                }
             }
         }
         return cursor;

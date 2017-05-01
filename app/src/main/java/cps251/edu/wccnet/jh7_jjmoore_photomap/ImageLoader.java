@@ -11,7 +11,6 @@ import android.util.Log;
 import android.widget.ImageView;
 
 import java.io.FileDescriptor;
-import java.io.FileNotFoundException;
 
 import static android.graphics.BitmapFactory.decodeFileDescriptor;
 
@@ -45,7 +44,7 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
             int sampleSize = this.calcSampleSize(options);
 
             return this.getScaledImage(sampleSize);
-        } catch (FileNotFoundException e) {
+        } catch (Exception e) {
             Log.d("Jeremy", "onActivityResult: FileNotFoundException: " + e.toString());
             return null;
         }
@@ -102,7 +101,7 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
 
     // ADD IMAGE TO CACHE. DISPLAY THE IMAGE IF REQUIRED. REMOVE RECORD IF IMAGE NOT FOUND.
     protected void onPostExecute(Bitmap bitmap) {
-        if (bitmap != null) {
+        if (bitmap != null && !bitmap.isRecycled()) {
             activityInterface.addImageToCache(uriString, bitmap);
             if (displayImage) {
                 imageView.setImageBitmap(bitmap);
