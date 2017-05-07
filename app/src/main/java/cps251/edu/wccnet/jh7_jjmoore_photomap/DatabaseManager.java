@@ -6,18 +6,29 @@ import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.CursorLoader;
 import android.database.Cursor;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.provider.DocumentsContract;
+import android.provider.MediaStore;
+import android.util.Log;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 
-class DatabaseManager {
+class DatabaseManager implements Serializable {
     private final Uri DATABASE_URI = Uri.parse("content://cps251.edu.wccnet.jh7_jjmoore_content_provider/photomap");
     private Activity activity;
     private ActivityInterface activityInterface;
     private String uri;
     private String description;
     private int resultCount;
+    private long date;
 
     DatabaseManager(Activity activity, ActivityInterface activityInterface) {
         this.activity = activity;
@@ -41,7 +52,7 @@ class DatabaseManager {
             if (cursor.isNull(1)) {
                 activityInterface.removeDeletedRecord();
             } else {
-                activityInterface.databaseToView("QUERY", 1, cursor.getString(1), cursor.getString(8));
+                activityInterface.databaseToView("QUERY", 1, cursor.getString(1), cursor.getString(8), cursor.getLong(9));
                 if (cursor.isNull(2)) {
                     activityInterface.databaseToMap(0, 0, 0, 0, 0, 1, false);
                 } else {
@@ -57,11 +68,38 @@ class DatabaseManager {
     // UPDATED MAP LOCATION WHEN USING CAMERA HANDLED SEPARATELY
     void insert(String uri, String operation) {
         this.uri = uri;
-        ContentValues values = new ContentValues();
+        this.getExifDate(Uri.parse(uri));
+
+        final ContentValues values = new ContentValues();
         values.put("operation", operation);
         values.put("uri", uri);
+        values.put("date", date);
         new DatabaseWork().execute(values);
     }
+
+    private void getExifDate(Uri uri) {
+        if (DocumentsContract.isDocumentUri(activity.getApplicationContext(), uri)) {
+            final String docId = DocumentsContract.getDocumentId(uri);
+            final String photoId = docId.substring(docId.lastIndexOf(':') + 1);
+            final String[] columns = {MediaStore.MediaColumns.DATA};
+
+            final Cursor cursor = MediaStore.Images.Media.query(activity.getContentResolver(),
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, columns, "_id=" + photoId, null);
+
+            if (cursor != null && cursor.moveToFirst()) {
+                try {
+                    final ExifInterface exif = new ExifInterface(cursor.getString(0));
+                    final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy:MM:dd", Locale.US);
+                    final Date date = dateFormat.parse(exif.getAttribute(ExifInterface.TAG_DATETIME).substring(0, 10));
+                    this.date = date.getTime();
+                } catch (IOException | ParseException e) {
+                    Log.d("Jeremy", "getExifDate: " + e.toString());
+                }
+                cursor.close();
+            }
+        }
+    }
+
 
     void delete(int id) {
         ContentValues values = new ContentValues();
@@ -83,6 +121,15 @@ class DatabaseManager {
         values.put("tilt", tilt);
         values.put("type", type);
         values.put("description", description);
+        new DatabaseWork().execute(values);
+    }
+
+    void update(int id, long date) {
+        this.date = date;
+        ContentValues values = new ContentValues();
+        values.put("operation", "UPDATE");
+        values.put("id", id);
+        values.put("date", date);
         new DatabaseWork().execute(values);
     }
 
@@ -115,9 +162,10 @@ class DatabaseManager {
         }
 
         protected void onPostExecute(String operation) {
-            activityInterface.databaseToView(operation, resultCount, uri, description);
+            activityInterface.databaseToView(operation, resultCount, uri, description, date);
             uri = null;
             description = null;
+            date = 0;
         }
     }
 

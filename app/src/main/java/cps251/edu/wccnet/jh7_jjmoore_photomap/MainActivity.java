@@ -1,5 +1,6 @@
 package cps251.edu.wccnet.jh7_jjmoore_photomap;
 
+import android.app.DialogFragment;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -36,8 +37,11 @@ import com.google.android.gms.maps.MapFragment;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
 
     private final int CAMERA = 0, GALLERY = 1;
     private TextView photoIndex;
+    private TextView photoDate;
     private ImageView image;
     private EditText editText;
     private DatabaseManager dbManager;
@@ -90,6 +95,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
         mapManager = new MapManager(this, this);
         dbManager = new DatabaseManager(this, this);
         photoIndex = (TextView) findViewById(R.id.photo_index);
+        photoDate = (TextView) findViewById(R.id.photo_date);
         image = (ImageView) findViewById(R.id.image);
         editText = (EditText) findViewById(R.id.search_notes);
         editText.setOnKeyListener(new MapSearch());
@@ -125,8 +131,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
         }
     }
 
-    // CLEAR BITMAP CACHE, ALTHOUGH APP CACHE STILL BUILDS UP.
-    // TO DO: CLEAR APP CACHE
+    // CLEAR BITMAP CACHE, CLEAR APP CACHE BUT GOOGLE MAPS STILL MAINTAINS A CACHE
     public void onDestroy() {
         bitmapCache.evictAll();
         File cache = getCacheDir();
@@ -137,6 +142,31 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
             }
         }
         super.onDestroy();
+    }
+
+    public void showDatePickerDialog(View view) {
+        int year = 0, month = 0, day = 0;
+        final String dateText = ((TextView) view).getText().toString();
+        final SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.US);
+        try {
+            final Date date = dateFormat.parse(dateText);
+            final Calendar calender = Calendar.getInstance();
+            calender.setTime(date);
+            year = calender.get(Calendar.YEAR);
+            month = calender.get(Calendar.MONTH);
+            day = calender.get(Calendar.DAY_OF_MONTH);
+        } catch (ParseException e) {
+            Log.d("Jeremy", "showDatePickerDialog: " + e.toString());
+        }
+        final Bundle bundle = new Bundle();
+        bundle.putInt("year", year);
+        bundle.putInt("month", month);
+        bundle.putInt("day", day);
+        bundle.putInt("id", idList.get(arrayIndex));
+        bundle.putSerializable("dbManager", dbManager);
+        final DialogFragment newFragment = new DatePicker();
+        newFragment.setArguments(bundle);
+        newFragment.show(getFragmentManager(), "datePicker");
     }
 
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -382,7 +412,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
 
     // UPDATE VIEW AFTER DATABASE ACTIVITY (INSERT, DELETE, QUERY, ETC...)
     // A LONG METHOD THAT IS VERY IMPORTANT AND MIGHT BE BETTER TO BREAK UP OR MOVE INTO SEPARATE CLASS
-    public void databaseToView(String operation, int result, String uri, String description) {
+    public void databaseToView(String operation, int result, String uri, String description, long date) {
 
         switch (operation) {
             // CALLED WHEN CHANGING RECORDS (VIA SWIPING)
@@ -435,6 +465,8 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
         }
         photoIndex.setText(String.format(getString(R.string.photo_index), arrayIndex + 1, idList.size()));
         editText.setText(description);
+        final DateFormat format = DateFormat.getDateInstance(DateFormat.MEDIUM);
+        photoDate.setText(format.format(new Date(date)));
     }
 
     private void updateImage(String uri) {

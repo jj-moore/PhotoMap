@@ -4,7 +4,7 @@ import android.graphics.Bitmap;
 
 interface ActivityInterface {
 
-    void databaseToView(String operation, int result, String uri, String description);
+    void databaseToView(String operation, int result, String uri, String description, long date);
 
     void databaseToMap(double lat, double lng, float zoom, float bearing, float tilt, int type, boolean hasMarker);
 

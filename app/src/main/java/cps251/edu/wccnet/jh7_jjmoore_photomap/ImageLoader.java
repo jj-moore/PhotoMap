@@ -14,6 +14,7 @@ import java.io.FileDescriptor;
 
 import static android.graphics.BitmapFactory.decodeFileDescriptor;
 
+
 class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
     private ImageView imageView;
     private Activity activity;
@@ -40,7 +41,7 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
             options.inJustDecodeBounds = true;
 
             this.setMaxDims();
-            decodeFileDescriptor(fileDescriptor, null, options);
+            BitmapFactory.decodeFileDescriptor(fileDescriptor, null, options);
             int sampleSize = this.calcSampleSize(options);
 
             return this.getScaledImage(sampleSize);
@@ -67,6 +68,7 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
         }
     }
 
+
     // CALCULATE THE SAMPLE SIZE TO FIT THE MAX DIMENSIONS AND USE THE NEXT SMALLEST SAMPLE SIZE
     private int calcSampleSize(BitmapFactory.Options options) {
         int originalImageWidth = options.outWidth;
@@ -87,6 +89,7 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
         options.inJustDecodeBounds = false;
         options.inSampleSize = sampleSize;
         Bitmap temp = decodeFileDescriptor(fileDescriptor, null, options);
+
 
         float widthScaling = (float) maxImageWidth / temp.getWidth();
         float heightScaling = (float) maxImageHeight / temp.getHeight();
