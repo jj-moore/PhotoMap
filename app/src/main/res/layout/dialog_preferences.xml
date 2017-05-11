@@ -29,6 +29,22 @@
         android:text="@string/preference_lite_mode"
         android:textSize="20sp" />
 
+    <CheckBox
+        android:id="@+id/check_delete_cache"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:text="@string/preference_delete_cache"
+        android:textSize="20sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:lines="2"
+        android:text="@string/preference_delete_text"
+        android:textSize="16sp" />
+
     <Button
         android:id="@+id/save_preferences"
         android:layout_width="wrap_content"

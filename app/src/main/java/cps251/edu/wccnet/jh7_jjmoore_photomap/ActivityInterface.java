@@ -12,9 +12,9 @@ interface ActivityInterface {
 
     void mapToView(int savedDbId);
 
-    void removeDeletedRecord();
-
     void addImageToCache(String uri, Bitmap bitmap);
 
-    void savePreferences(boolean liteMode, boolean animateCamera, boolean showBuildings);
+    void savePreferences(boolean liteMode, boolean animateCamera, boolean showBuildings, boolean deleteCache);
+
+    void saveCaption(CharSequence caption);
 }

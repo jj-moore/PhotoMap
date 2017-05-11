@@ -18,6 +18,7 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Locale;
 
@@ -26,7 +27,7 @@ class DatabaseManager implements Serializable {
     private Activity activity;
     private ActivityInterface activityInterface;
     private String uri;
-    private String description;
+    private String caption;
     private int resultCount;
     private long date;
 
@@ -45,23 +46,40 @@ class DatabaseManager implements Serializable {
         return idList;
     }
 
-    Cursor query(String[] columns, String where) {
-        CursorLoader loader = new CursorLoader(activity, DATABASE_URI, columns, where, null, "id");
-        Cursor cursor = loader.loadInBackground();
-        if (cursor.moveToFirst()) {
-            if (cursor.isNull(1)) {
-                activityInterface.removeDeletedRecord();
+    void updateViewWithId(int id) {
+        final CursorLoader loader = new CursorLoader(activity, DATABASE_URI, null, "id=" + id, null, null);
+        final Cursor cursor = loader.loadInBackground();
+        if (cursor != null && cursor.moveToFirst()) {
+            activityInterface.databaseToView("QUERY", cursor.getCount(),
+                    cursor.getString(cursor.getColumnIndex("uri")),
+                    cursor.getString(cursor.getColumnIndex("caption")),
+                    cursor.getLong(cursor.getColumnIndex("date")));
+
+            if (cursor.isNull(2)) { // MAP NOT SET YET
+                activityInterface.databaseToMap(0, 0, 0, 0, 0, 1, false);
             } else {
-                activityInterface.databaseToView("QUERY", 1, cursor.getString(1), cursor.getString(8), cursor.getLong(9));
-                if (cursor.isNull(2)) {
-                    activityInterface.databaseToMap(0, 0, 0, 0, 0, 1, false);
-                } else {
-                    activityInterface.databaseToMap(cursor.getDouble(2), cursor.getDouble(3), cursor.getFloat(4),
-                            cursor.getFloat(5), cursor.getFloat(6), cursor.getInt(7), true);
-                }
+                activityInterface.databaseToMap(
+                        cursor.getDouble(cursor.getColumnIndex("lat")),
+                        cursor.getDouble(cursor.getColumnIndex("lng")),
+                        cursor.getFloat(cursor.getColumnIndex("zoom")),
+                        cursor.getFloat(cursor.getColumnIndex("bearing")),
+                        cursor.getFloat(cursor.getColumnIndex("tilt")),
+                        cursor.getInt(cursor.getColumnIndex("type")),
+                        true);
             }
+            cursor.close();
         }
-        return cursor;
+    }
+
+    String getUriString(int id) {
+        String uriString = null;
+        final CursorLoader loader = new CursorLoader(activity, DATABASE_URI, new String[]{"uri"}, "id=" + id, null, null);
+        final Cursor cursor = loader.loadInBackground();
+        if (cursor != null && cursor.moveToFirst()) {
+            uriString = cursor.getString(0);
+            cursor.close();
+        }
+        return uriString;
     }
 
     // WHEN INSERTING A NEW RECORD YOU CAN ONLY HAVE A URI.
@@ -77,6 +95,14 @@ class DatabaseManager implements Serializable {
         new DatabaseWork().execute(values);
     }
 
+
+    void insertFromCamera(String uri) {
+        this.uri = uri;
+        this.getExifDate(Uri.parse(uri));
+
+
+    }
+
     private void getExifDate(Uri uri) {
         if (DocumentsContract.isDocumentUri(activity.getApplicationContext(), uri)) {
             final String docId = DocumentsContract.getDocumentId(uri);
@@ -89,9 +115,13 @@ class DatabaseManager implements Serializable {
             if (cursor != null && cursor.moveToFirst()) {
                 try {
                     final ExifInterface exif = new ExifInterface(cursor.getString(0));
-                    final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy:MM:dd", Locale.US);
-                    final Date date = dateFormat.parse(exif.getAttribute(ExifInterface.TAG_DATETIME).substring(0, 10));
-                    this.date = date.getTime();
+                    if (exif.getAttribute(ExifInterface.TAG_DATETIME) != null) {
+                        final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy:MM:dd", Locale.US);
+                        final Date date = dateFormat.parse(exif.getAttribute(ExifInterface.TAG_DATETIME).substring(0, 10));
+                        this.date = date.getTime();
+                    } else {
+                        this.date = Calendar.getInstance().getTimeInMillis();
+                    }
                 } catch (IOException | ParseException e) {
                     Log.d("Jeremy", "getExifDate: " + e.toString());
                 }
@@ -102,17 +132,16 @@ class DatabaseManager implements Serializable {
 
 
     void delete(int id) {
-        ContentValues values = new ContentValues();
+        final ContentValues values = new ContentValues();
         values.put("operation", "DELETE");
         values.put("id", id);
         new DatabaseWork().execute(values);
     }
 
-    void update(int id, double lat, double lng, float zoom, float bearing,
-                float tilt, int type, String description) {
-        this.description = description;
-        ContentValues values = new ContentValues();
-        values.put("operation", "UPDATE");
+    void updateMap(int id, double lat, double lng, float zoom,
+                   float bearing, float tilt, int type) {
+        final ContentValues values = new ContentValues();
+        values.put("operation", "UPDATE_MAP");
         values.put("id", id);
         values.put("lat", lat);
         values.put("lng", lng);
@@ -120,14 +149,22 @@ class DatabaseManager implements Serializable {
         values.put("bearing", bearing);
         values.put("tilt", tilt);
         values.put("type", type);
-        values.put("description", description);
         new DatabaseWork().execute(values);
     }
 
-    void update(int id, long date) {
+    void updateCaption(int id, String caption) {
+        this.caption = caption;
+        final ContentValues values = new ContentValues();
+        values.put("operation", "UPDATE_CAPTION");
+        values.put("id", id);
+        values.put("caption", caption);
+        new DatabaseWork().execute(values);
+    }
+
+    void updateDate(int id, long date) {
         this.date = date;
-        ContentValues values = new ContentValues();
-        values.put("operation", "UPDATE");
+        final ContentValues values = new ContentValues();
+        values.put("operation", "UPDATE_DATE");
         values.put("id", id);
         values.put("date", date);
         new DatabaseWork().execute(values);
@@ -137,35 +174,36 @@ class DatabaseManager implements Serializable {
     private class DatabaseWork extends AsyncTask<ContentValues, Integer, String> {
 
         protected String doInBackground(ContentValues... values_array) {
-            int id;
-            ContentValues values = values_array[0];
-            String operation = values.getAsString("operation");
+            final ContentResolver resolver = activity.getContentResolver();
+            final ContentValues values = values_array[0];
+            final String operation = values.getAsString("operation");
             values.remove("operation");
-            ContentResolver resolver = activity.getContentResolver();
 
             switch (operation) {
                 case "INSERT_FROM_GALLERY":
                 case "INSERT_FROM_CAMERA":
-                    values.put("uri", values.getAsString("uri"));
+                    //values.put("uri", values.getAsString("uri"));
                     resultCount = (int) ContentUris.parseId(resolver.insert(DATABASE_URI, values));
                     break;
-                case "UPDATE":
-                    id = values.getAsInteger("id");
-                    resultCount = resolver.update(DATABASE_URI, values, "id=" + id, null);
+                case "UPDATE_MAP":
+                case "UPDATE_CAPTION":
+                case "UPDATE_DATE":
+                    resultCount = resolver.update(DATABASE_URI, values, "id=" + values.getAsInteger("id"), null);
                     break;
                 case "DELETE":
-                    id = values.getAsInteger("id");
-                    resultCount = resolver.delete(DATABASE_URI, "id=" + id, null);
+                    resultCount = resolver.delete(DATABASE_URI, "id=" + values.getAsInteger("id"), null);
                     break;
             }
             return operation;
         }
 
         protected void onPostExecute(String operation) {
-            activityInterface.databaseToView(operation, resultCount, uri, description, date);
+            activityInterface.databaseToView(operation, resultCount, uri, caption, date);
+            resultCount = 0;
             uri = null;
-            description = null;
+            caption = null;
             date = 0;
+
         }
     }
 

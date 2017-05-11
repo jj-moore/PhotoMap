@@ -33,8 +33,7 @@ class MapManager implements OnMapReadyCallback {
         this.activityInterface = activityInterface;
     }
 
-    // THIS IS WHERE THE APPLICATION REALLY STARTS
-    // DO NOT ACCESS THE MAP UNTIL THIS IS CALLED
+    // THIS IS WHERE THE APPLICATION REALLY STARTS. DO NOT ACCESS THE MAP UNTIL THIS IS CALLED
     public void onMapReady(GoogleMap googleMap) {
         map = googleMap;
         map.setPadding(5, 5, 5, 5);
@@ -44,39 +43,36 @@ class MapManager implements OnMapReadyCallback {
             }
         });
 
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        int savedIndex = preferences.getInt("id", -1);
+        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        final int savedDbId = preferences.getInt("id", -1);
         setAnimateCamera(preferences.getBoolean("animate", true));
         setBuildings(preferences.getBoolean("buildings", true));
-        activityInterface.mapToView(savedIndex);
+        activityInterface.mapToView(savedDbId);
     }
 
     // CALLED FROM MAIN ACTIVITY TO UPDATE MAP
     void updateMap(double lat, double lng, float zoom, float bearing, float tilt, int type, boolean marker) {
-        CameraPosition.Builder position_builder = new CameraPosition.Builder();
-        LatLng current_position = new LatLng(lat, lng);
-        map.setBuildingsEnabled(buildings);
+        final LatLng current_position = new LatLng(lat, lng);
+        final CameraPosition.Builder position_builder = new CameraPosition.Builder();
 
-        map.clear();
-        if (marker) {
-            currentMarker = map.addMarker(new MarkerOptions().position(current_position));
-        } else {
-            currentMarker = null;
-        }
         position_builder.target(current_position);
         position_builder.zoom(zoom);
         position_builder.bearing(bearing);
         position_builder.tilt(tilt);
-        CameraPosition position = position_builder.build();
-        CameraUpdate camera_update = CameraUpdateFactory.newCameraPosition(position);
+        final CameraPosition position = position_builder.build();
+        final CameraUpdate camera_update = CameraUpdateFactory.newCameraPosition(position);
 
-        map.setMapType(type);
+        map.clear();
+        currentMarker = marker ? map.addMarker(new MarkerOptions().position(current_position)) : null;
+
+        // SET PREFERENCES
+        map.setBuildingsEnabled(buildings);
+        map.setMapType((type == 0) ? 1 : type); // INSURE MAP TYPE IS NEVER 0 (DISPLAYS BLANK MAP AREA)
         if (animate) {
             map.animateCamera(camera_update);
         } else {
             map.moveCamera(camera_update);
         }
-
     }
 
     // UPDATE MAP WHEN NO LOCATION IS SET (E.G. NEW RECORD)
@@ -100,7 +96,7 @@ class MapManager implements OnMapReadyCallback {
 
     // CALLED FROM MAIN ACTIVITY WHEN HIT ENTER ON EDIT TEXT
     void searchMap(String search_string) {
-        Geocoder geocoder = new Geocoder(context);
+        final Geocoder geocoder = new Geocoder(context);
         try {
             List<Address> address = geocoder.getFromLocationName(search_string, 1);
             if (address.size() > 0) {
@@ -114,7 +110,7 @@ class MapManager implements OnMapReadyCallback {
 
     // CALLED WHEN SELECTING 'SAVE MAP' ON OPTION MENU OR LONG PRESS ON MAP
     void saveMap(LatLng location) {
-        CameraPosition position = map.getCameraPosition();
+        final CameraPosition position = map.getCameraPosition();
         if (location == null) {
             location = (currentMarker == null) ? position.target : currentMarker.getPosition();
         }
@@ -139,7 +135,7 @@ class MapManager implements OnMapReadyCallback {
 
     void setBuildings(boolean buildings) {
         this.buildings = buildings;
-        if (map != null) { // WHEN THIS IS CALLED BEFORE ON_MAP_READY
+        if (map != null) { // IN CASE THIS IS CALLED BEFORE ON_MAP_READY
             map.setBuildingsEnabled(buildings);
         }
     }

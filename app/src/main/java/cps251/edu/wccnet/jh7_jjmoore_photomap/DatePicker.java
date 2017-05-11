@@ -26,7 +26,7 @@ public class DatePicker extends DialogFragment implements DatePickerDialog.OnDat
     public void onDateSet(android.widget.DatePicker view, int year, int month, int date) {
         final Calendar calendar = Calendar.getInstance();
         calendar.set(year, month, date);
-        dbManager.update(id, calendar.getTimeInMillis());
+        dbManager.updateDate(id, calendar.getTimeInMillis());
     }
 
 }

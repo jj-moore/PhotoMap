@@ -16,11 +16,12 @@ import static android.graphics.BitmapFactory.decodeFileDescriptor;
 
 
 class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
-    private ImageView imageView;
+    private final BitmapFactory.Options options = new BitmapFactory.Options();
     private Activity activity;
     private ActivityInterface activityInterface;
+    private ImageView imageView;
+
     private String uriString;
-    private BitmapFactory.Options options;
     private FileDescriptor fileDescriptor;
     private int maxImageWidth, maxImageHeight;
     private boolean displayImage;
@@ -33,31 +34,29 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
     }
 
     protected Bitmap doInBackground(String... strings) {
+        uriString = strings[0];
+        Uri uri = Uri.parse(uriString);
         try {
-            uriString = strings[0];
-            Uri uri = Uri.parse(uriString);
             fileDescriptor = activity.getContentResolver().openFileDescriptor(uri, "r").getFileDescriptor();
-            options = new BitmapFactory.Options();
-            options.inJustDecodeBounds = true;
-
-            this.setMaxDims();
-            BitmapFactory.decodeFileDescriptor(fileDescriptor, null, options);
-            int sampleSize = this.calcSampleSize(options);
-
-            return this.getScaledImage(sampleSize);
         } catch (Exception e) {
-            Log.d("Jeremy", "onActivityResult: FileNotFoundException: " + e.toString());
+            Log.d("Jeremy", "ImageLoader:doInBackground: FileNotFoundException: " + e.toString());
             return null;
         }
+
+        options.inJustDecodeBounds = true;
+        this.setMaxDims();
+        BitmapFactory.decodeFileDescriptor(fileDescriptor, null, options);
+        int sampleSize = this.calcSampleSize(options);
+        return this.getScaledImage(sampleSize);
     }
 
     // PHOTO WILL TAKE UP 100% OF WIDTH AND 50% OF HEIGHT IN PORTRAIT MODE (REVERSE IN LANDSCAPE).
     private void setMaxDims() {
         final float imageScale = 0.5F;
-        DisplayMetrics displayMetrics = new DisplayMetrics();
+        final DisplayMetrics displayMetrics = new DisplayMetrics();
         activity.getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-        int displayWidth = displayMetrics.widthPixels;
-        int displayHeight = displayMetrics.heightPixels;
+        final int displayWidth = displayMetrics.widthPixels;
+        final int displayHeight = displayMetrics.heightPixels;
 
         if (activity.getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
             maxImageWidth = displayWidth;
@@ -67,7 +66,6 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
             maxImageHeight = displayHeight;
         }
     }
-
 
     // CALCULATE THE SAMPLE SIZE TO FIT THE MAX DIMENSIONS AND USE THE NEXT SMALLEST SAMPLE SIZE
     private int calcSampleSize(BitmapFactory.Options options) {
@@ -88,16 +86,15 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
     private Bitmap getScaledImage(int sampleSize) {
         options.inJustDecodeBounds = false;
         options.inSampleSize = sampleSize;
-        Bitmap temp = decodeFileDescriptor(fileDescriptor, null, options);
+        final Bitmap temp = decodeFileDescriptor(fileDescriptor, null, options);
 
+        final float widthScaling = (float) maxImageWidth / temp.getWidth();
+        final float heightScaling = (float) maxImageHeight / temp.getHeight();
+        final float scale = widthScaling > heightScaling ? heightScaling : widthScaling;
+        final int finalWidth = (int) (temp.getWidth() * scale);
+        final int finalHeight = (int) (temp.getHeight() * scale);
 
-        float widthScaling = (float) maxImageWidth / temp.getWidth();
-        float heightScaling = (float) maxImageHeight / temp.getHeight();
-        float scale = widthScaling > heightScaling ? heightScaling : widthScaling;
-        int finalWidth = (int) (temp.getWidth() * scale);
-        int finalHeight = (int) (temp.getHeight() * scale);
-
-        Bitmap scaled = Bitmap.createScaledBitmap(temp, finalWidth, finalHeight, false);
+        final Bitmap scaled = Bitmap.createScaledBitmap(temp, finalWidth, finalHeight, false);
         temp.recycle();
         return scaled;
     }
@@ -110,7 +107,8 @@ class ImageLoader extends AsyncTask<String, Integer, Bitmap> {
                 imageView.setImageBitmap(bitmap);
             }
         } else {
-            activityInterface.removeDeletedRecord();
+            // PHOTO MAY HAVE BEEN DELETED
+            //activityInterface.removeDeletedRecord();
         }
     }
 }

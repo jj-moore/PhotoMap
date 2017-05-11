@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.location.Location;
 import android.location.LocationManager;
@@ -26,9 +25,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -48,103 +45,111 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity implements ActivityInterface {
 
-    private final int CAMERA = 0, GALLERY = 1;
+    // UI FIELDS
+    private ImageView photo;
     private TextView photoIndex;
     private TextView photoDate;
-    private ImageView image;
-    private EditText editText;
-    private DatabaseManager dbManager;
-    private MapManager mapManager;
-    private String newPhotoUri;
+    private TextView photoCaption;
+
+    // HELPER CLASSES
+    private final DatabaseManager dbManager = new DatabaseManager(this, this);
+    private final MapManager mapManager = new MapManager(this, this);
+
+    private final LruCache<String, Bitmap> bitmapCache = initializeBitmapCache();
+    private final int CAMERA = 0, GALLERY = 1; // INTENT CONSTANTS
     private ArrayList<Integer> idList;
-    private LruCache<String, Bitmap> bitmapCache;
     private int arrayIndex;
+    private String newPhotoUri;
     private float actionDown;
     private boolean liteMode;
+    private boolean deleteCache;
 
     protected void onSaveInstanceState(Bundle outState) {
-        outState.putIntegerArrayList("idList", idList);
         outState.putInt("arrayIndex", arrayIndex);
-        outState.putString("editText", editText.getText().toString());
-        outState.putString("newPhotoUri", newPhotoUri);
         super.onSaveInstanceState(outState);
     }
 
     protected void onRestoreInstanceState(Bundle inState) {
         super.onRestoreInstanceState(inState);
-        idList = inState.getIntegerArrayList("idList");
         arrayIndex = inState.getInt("arrayIndex");
-        editText.setText(inState.getString("editText"));
-        MapFragment mapFragment = (MapFragment) getFragmentManager().findFragmentById(R.id.map);
-        mapFragment.getMapAsync(mapManager);
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         liteMode = preferences.getBoolean("liteMode", false);
+        deleteCache = preferences.getBoolean("deleteCache", false);
         if (liteMode) {
             setContentView(R.layout.activity_lite);
         } else {
             setContentView(R.layout.activity_main);
         }
-        // EDIT TEXT AUTOMATICALLY GETS FOCUS. HIDE KEYBOARD.
-        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
 
-        mapManager = new MapManager(this, this);
-        dbManager = new DatabaseManager(this, this);
+        // INITIALIZE UI FIELDS
         photoIndex = (TextView) findViewById(R.id.photo_index);
         photoDate = (TextView) findViewById(R.id.photo_date);
-        image = (ImageView) findViewById(R.id.image);
-        editText = (EditText) findViewById(R.id.search_notes);
-        editText.setOnKeyListener(new MapSearch());
-        image.setOnTouchListener(new DetectSwipe());
+        photo = (ImageView) findViewById(R.id.image);
+        photo.setOnTouchListener(new DetectSwipe());
+        photoCaption = (TextView) findViewById(R.id.search_notes);
+        photoCaption.setOnClickListener(new EditCaption());
 
         // CREATE ARRAY LIST OF DATABASE ID'S
         idList = dbManager.getIdList();
-        arrayIndex = idList.size() > 0 ? 0 : -1;
 
-        // CREATE MEMORY CACHE TO STORE BITMAPS. MAX SIZE IS 1/8 OF APP MEMORY OR 8MB
+        // NOTHING ELSE HAPPENS UNTIL GOOGLE MAP IS READY. SEE MAP MANAGER 'ON MAP READY'
+        final MapFragment mapFragment = (MapFragment) getFragmentManager().findFragmentById(R.id.map);
+        mapFragment.getMapAsync(mapManager);
+    }
+
+    // CREATE MEMORY CACHE TO STORE BITMAPS. MAX SIZE IS 1/8 OF APP MEMORY OR 8MB
+    private LruCache<String, Bitmap> initializeBitmapCache() {
         final int maxMemory = (int) (Runtime.getRuntime().maxMemory());
         final int cacheSize = Math.min(maxMemory / 8, (8 * 1024 * 1024));
-        bitmapCache = new LruCache<String, Bitmap>(cacheSize) {
+        return new LruCache<String, Bitmap>(cacheSize) {
             protected int sizeOf(String key, Bitmap bitmap) {
                 return bitmap.getByteCount();
             }
         };
-
-        // NOTHING ELSE HAPPENS UNTIL GOOGLE MAP IS READY. SEE MAP MANAGER 'ON MAP READY'
-        MapFragment mapFragment = (MapFragment) getFragmentManager().findFragmentById(R.id.map);
-        mapFragment.getMapAsync(mapManager);
     }
 
     // SAVE LAST VIEWED PICTURE SO WE CAN LOAD IT WHEN APP STARTS AGAIN
     // RETRIEVED IN MAP MANAGER 'ON MAP READY'
     public void onPause() {
         super.onPause();
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        SharedPreferences.Editor editor = preferences.edit();
         if (!idList.isEmpty()) {
-            editor.putInt("id", idList.get(arrayIndex));
-            editor.apply();
+            final SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(this).edit();
+            editor.putInt("id", idList.get(arrayIndex)).apply();
         }
     }
 
     // CLEAR BITMAP CACHE, CLEAR APP CACHE BUT GOOGLE MAPS STILL MAINTAINS A CACHE
     public void onDestroy() {
         bitmapCache.evictAll();
-        File cache = getCacheDir();
-        for (File file : cache.listFiles()) {
-            if (file.isFile()) {
-                Log.d("Jeremy", "onDestroy: " + file.getName() + " " + file.getTotalSpace());
-                deleteFile(file.getName());
-            }
+        deleteDir(getCacheDir());
+        if (deleteCache) {
+            deleteDir(getExternalCacheDir());
         }
         super.onDestroy();
     }
 
+    // RECURSIVE FUNCTION TO DELETE CACHE
+    private void deleteDir(File target) {
+        if (target.isDirectory() && target.listFiles().length > 0) {
+            for (File file : target.listFiles()) {
+                deleteDir(file);
+            }
+        } else {
+            target.delete();
+        }
+    }
+
     public void showDatePickerDialog(View view) {
+        if (idList.isEmpty()) {
+            return;
+        }
+
+        // CONVERT DATE_TEXT TO YEAR, MONTH, DAY INTEGERS
         int year = 0, month = 0, day = 0;
         final String dateText = ((TextView) view).getText().toString();
         final SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.US);
@@ -158,6 +163,8 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
         } catch (ParseException e) {
             Log.d("Jeremy", "showDatePickerDialog: " + e.toString());
         }
+
+        // BUNDLE PARAMETERS AND START FRAGMENT
         final Bundle bundle = new Bundle();
         bundle.putInt("year", year);
         bundle.putInt("month", month);
@@ -177,35 +184,32 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
 
     // HIDE 'TAKE PHOTO' IF NO CAMERA AVAILABLE
     public boolean onPrepareOptionsMenu(Menu menu) {
-        PackageManager packageManager = getPackageManager();
-        MenuItem item = menu.findItem(R.id.option_take_photo);
+        final PackageManager packageManager = getPackageManager();
+        final MenuItem item = menu.findItem(R.id.option_take_photo);
         item.setVisible(packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA));
         return true;
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
-        Intent intent;
         switch (item.getItemId()) {
             case R.id.option_take_photo:
-                intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                if (intent.resolveActivity(getPackageManager()) != null) {
+                final Intent cameraIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                if (cameraIntent.resolveActivity(getPackageManager()) != null) { //IF DEVICE HAS A CAMERA
 
                     // IF SUCCESSFULLY CREATED FILE FOR NEW PHOTO THEN CONTINUE
-                    File newPhotoFile = getPhotoFile();
+                    final File newPhotoFile = getPhotoFile();
                     if (newPhotoFile != null) {
-                        Uri uri = FileProvider.getUriForFile(this, "edu.wccnet.jjmoore.photomap", newPhotoFile);
+                        final Uri uri = FileProvider.getUriForFile(this, "edu.wccnet.jjmoore.photomap", newPhotoFile);
                         newPhotoUri = uri.toString(); // SAVE FOR ON_ACTIVITY_RESULT (AND IN CASE OF ORIENTATION CHANGE)
-                        intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+                        cameraIntent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
 
                         // GRANT URI PERMISSIONS TO ALL PACKAGES THAT CAN RESPOND TO ACTION_IMAGE_CAPTURE
-                        List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+                        final List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(cameraIntent, PackageManager.MATCH_DEFAULT_ONLY);
                         for (ResolveInfo resolveInfo : resInfoList) {
-                            String packageName = resolveInfo.activityInfo.packageName;
-                            grantUriPermission(packageName, uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            grantUriPermission(resolveInfo.activityInfo.packageName, uri,
+                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         }
-
-                        Toast.makeText(this, "Opening Camera", Toast.LENGTH_SHORT).show();
-                        startActivityForResult(intent, CAMERA);
+                        startActivityForResult(cameraIntent, CAMERA);
                     } else {
                         Toast.makeText(this, "Error Creating Photo File", Toast.LENGTH_SHORT).show();
                     }
@@ -214,26 +218,28 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
                 }
                 break;
             case R.id.option_add_photo:
-                intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                intent.setType("image/*");
-                Toast.makeText(this, "Opening Image Viewer", Toast.LENGTH_SHORT).show();
-                startActivityForResult(intent, GALLERY);
+                final Intent galleryIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                galleryIntent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                galleryIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                galleryIntent.setType("image/*");
+                startActivityForResult(galleryIntent, GALLERY);
                 break;
             case R.id.option_save_location:
-                mapManager.saveMap(null);
+                if (!idList.isEmpty()) {
+                    mapManager.saveMap(null);
+                }
                 break;
             case R.id.option_toggle_view:
                 startAlertDialog();
                 break;
             case R.id.set_preferences:
-                DialogPreferences dialog = new DialogPreferences(this, this, liteMode,
-                        mapManager.getAnimateCamera(), mapManager.hasBuildings());
-                dialog.show();
+                new DialogPreferences(this, this, liteMode, mapManager.getAnimateCamera(),
+                        mapManager.hasBuildings(), deleteCache).show();
                 break;
             case R.id.option_delete:
-                dbManager.delete(idList.get(arrayIndex));
+                if (!idList.isEmpty()) {
+                    dbManager.delete(idList.get(arrayIndex));
+                }
                 break;
         }
         return true;
@@ -243,10 +249,10 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
     File getPhotoFile() {
         File newPhotoFile = null;
         try {
-            File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + "/Photomap");
+            final File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES + "/Photomap");
             path.mkdirs();
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-            String imageFileName = "PHOTOMAP_" + timeStamp;
+            final String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            final String imageFileName = "PHOTOMAP_" + timeStamp;
             newPhotoFile = File.createTempFile(imageFileName, ".jpg", path);
         } catch (IOException e) {
             Log.d("Jeremy", "onActivityResult: " + e.toString());
@@ -256,9 +262,9 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
 
     // DIALOG BOX TO SELECT MAP TYPE (HYBRID, SATELLITE, TERRAIN)
     void startAlertDialog() {
-        AlertDialog.Builder alertBuilder = new AlertDialog.Builder(this);
+        final AlertDialog.Builder alertBuilder = new AlertDialog.Builder(this);
         alertBuilder.setTitle(R.string.dialog_mapview);
-        DialogInterface.OnClickListener dialog = new DialogInterface.OnClickListener() {
+        final DialogInterface.OnClickListener dialog = new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialoginterface, int which) {
                 mapManager.setView(which);
             }
@@ -267,21 +273,26 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
         alertBuilder.show();
     }
 
-    /*** BEGIN ON_KEY_LISTENER INNER CLASS ***/
-    private class MapSearch implements View.OnKeyListener {
+    /*** BEGIN ON_CLICK_LISTENER INNER CLASS ***/
+    private class EditCaption implements View.OnClickListener {
+
+        public void onClick(View view) {
+            if (!idList.isEmpty()) {
+                new DialogCaption(MainActivity.this, MainActivity.this, photoCaption.getText().toString()).show();
+            }
+        }
 
         // SEARCH MAP FROM EDIT TEXT
-        // MINOR ISSUE: ALSO USED FOR NOTES AND APP CAN'T DETERMINE IF YOU INTEND TO SEARCH OR NOT
         public boolean onKey(View view, int key_code, KeyEvent event) {
             if (key_code != KeyEvent.KEYCODE_ENTER
                     || event.getAction() != KeyEvent.ACTION_DOWN
-                    || editText.getText().length() == 0)
+                    || photoCaption.getText().length() == 0)
                 return false;
 
             // HIDE KEYBOARD AFTER HITTING ENTER
-            InputMethodManager mgr = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            mgr.hideSoftInputFromWindow(editText.getWindowToken(), 0);
-            mapManager.searchMap(editText.getText().toString());
+            final InputMethodManager mgr = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            mgr.hideSoftInputFromWindow(photoCaption.getWindowToken(), 0);
+            mapManager.searchMap(photoCaption.getText().toString());
             return true;
         }
     } // END ON_KEY_LISTENER INNER CLASS
@@ -291,19 +302,23 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
 
         // DETECT PHOTO SWIPE AND CHANGE RECORD ACCORDINGLY
         public boolean onTouch(View v, MotionEvent event) {
+            if (idList.isEmpty()) {
+                return false;
+            }
+
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     // SAVE ACTION_DOWN TO COMPARE WITH ACTION_UP LATER
                     actionDown = event.getX();
                     break;
                 case MotionEvent.ACTION_UP:
-                    float swipe = actionDown - event.getX();
+                    final float swipe = actionDown - event.getX();
                     if (swipe > 100 && arrayIndex < (idList.size() - 1)) {
                         arrayIndex++;
-                        dbManager.query(null, "id=" + idList.get(arrayIndex));
+                        dbManager.updateViewWithId(idList.get(arrayIndex));
                     } else if (swipe < -100 && arrayIndex > 0) {
                         arrayIndex--;
-                        dbManager.query(null, "id=" + idList.get(arrayIndex));
+                        dbManager.updateViewWithId(idList.get(arrayIndex));
                     }
                     break;
                 default:
@@ -321,8 +336,8 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
         switch (requestCode) {
             case CAMERA:
                 // SAVE PHOTO FROM CAMERA TO GALLERY
-                Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-                Uri cameraUri = Uri.parse(newPhotoUri);
+                final Intent intent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+                final Uri cameraUri = Uri.parse(newPhotoUri);
                 intent.setData(cameraUri);
                 getApplicationContext().revokeUriPermission(cameraUri,
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION); // REMOVE PERMISSIONS WE HAD TO GRANT TO CAMERA
@@ -333,7 +348,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
             case GALLERY:
                 // SAVE PHOTO FROM GALLERY
                 // HAD TROUBLE WITH KEEPING PERMISSIONS THROUGH REBOOT. MAKE SURE TO PERSIST PERMISSIONS
-                Uri uri = data.getData();
+                final Uri uri = data.getData();
                 grantUriPermission(getPackageName(), uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 dbManager.insert(uri.toString(), "INSERT_FROM_GALLERY");
@@ -344,7 +359,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
     // TRY TO GET LOCATION FROM GPS, IF NOT TRY TO GET FROM NETWORK
     // TRIED TO DETECT IF GPS WAS AVAILABLE AND WAS GETTING NULL LOCATION WITH GPS AVAILABLE
     Location getCurrentLocation() {
-        LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        final LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         if (location == null) {
             location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
@@ -354,65 +369,68 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
 
     /*** START OF ACTIVITY_INTERFACE METHODS ***/
 
+    // CALLED FROM MAP MANAGER ON_MAP_READY WHEN FIRST START START OR WHEN RESUME
+    public void mapToView(int savedDbId) {
+        if (idList.isEmpty()) {
+            mapManager.updateMap();
+            photo.setImageBitmap(null);
+            photoIndex.setText(String.format(getString(R.string.photo_index), 0, 0));
+        } else {
+            arrayIndex = (idList.contains(savedDbId)) ? idList.indexOf(savedDbId) : 0;
+            dbManager.updateViewWithId(savedDbId);
+            photoIndex.setText(String.format(getString(R.string.photo_index), arrayIndex + 1, idList.size()));
+        }
+    }
+
     // SAVE MAP DATA TO DATABASE
     public void mapToDatabase(double lat, double lng, float zoom, float bearing, float tilt, int type) {
-        if (idList.size() > 0) // IN CASE SOMEONE TRIES TO SAVE A LOCATION WHEN NO PHOTOS ARE PRESENT
-            dbManager.update(idList.get(arrayIndex), lat, lng, zoom, bearing, tilt, type, editText.getText().toString());
+        if (!idList.isEmpty()) // IN CASE SOMEONE TRIES TO SAVE A LOCATION WHEN NO PHOTOS ARE PRESENT
+            dbManager.updateMap(idList.get(arrayIndex), lat, lng, zoom, bearing, tilt, type);
     }
 
     // LOAD MAP DATA FROM DATABASE
     public void databaseToMap(double lat, double lng, float zoom, float bearing, float tilt, int type, boolean hasMarker) {
-        type = (type == 0) ? 1 : type; // TO INSURE MAP TYPE IS NEVER 0 (DISPLAYS BLANK MAP AREA)
         mapManager.updateMap(lat, lng, zoom, bearing, tilt, type, hasMarker);
     }
 
-    // REMOVE ANY RECORDS IF THE PHOTO CANNOT BE ACCESSED.
-    // MIGHT BE A BETTER WAY TO HANDLE THIS, BUT IF THERE'S NO PICTURE, THERE'S NO POINT
-    public void removeDeletedRecord() {
-        dbManager.delete(idList.get(arrayIndex));
-        Toast.makeText(this, "Photo not found. Record Deleted", Toast.LENGTH_SHORT).show();
-    }
-
-    // STORE PREFERENCES FROM DIALOG BOX. RETRIEVED IN MAP MANAGER 'ON MAP READY'
+    // STORE PREFERENCES FROM DIALOG BOX. RETRIEVED IN MAP MANAGER 'ON MAP READY' AND ON CREATE
     // ALSO, IF THEY CHANGE TO LITE MODE, RESTART THE APPLICATION AND CHANGE THE LAYOUT
-    public void savePreferences(boolean liteMode, boolean animateCamera, boolean showBuildings) {
+    public void savePreferences(boolean liteMode, boolean animateCamera, boolean showBuildings, boolean deleteCache) {
         mapManager.setAnimateCamera(animateCamera);
         mapManager.setBuildings(showBuildings);
 
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        SharedPreferences.Editor editor = preferences.edit();
+        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+        final SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean("liteMode", liteMode);
         editor.putBoolean("animate", animateCamera);
         editor.putBoolean("buildings", showBuildings);
+        editor.putBoolean("deleteCache", deleteCache);
         editor.apply();
 
+        this.deleteCache = deleteCache;
         if (this.liteMode != liteMode) {
             this.liteMode = liteMode;
-            Intent intent = getBaseContext().getPackageManager()
+            final Intent intent = getBaseContext().getPackageManager()
                     .getLaunchIntentForPackage(getBaseContext().getPackageName());
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             startActivity(intent);
         }
+        Toast.makeText(this, "Preferences Saved", Toast.LENGTH_SHORT).show();
     }
 
-    // CALLED FROM MAP MANAGER ON_MAP_READY WHEN FIRST START START OR WHEN RESUME
-    public void mapToView(int savedDbId) {
-        arrayIndex = idList.indexOf(savedDbId);
-        if (idList.isEmpty()) {
-            mapManager.updateMap();
-            image.setImageBitmap(null);
-        } else {
-            arrayIndex = (arrayIndex == -1) ? 0 : arrayIndex;
-            dbManager.query(null, "id=" + idList.get(arrayIndex));
-        }
-
-        photoIndex.setText(String.format(getString(R.string.photo_index), arrayIndex + 1, idList.size()));
+    public void saveCaption(CharSequence caption) {
+        photoCaption.setText(caption);
+        dbManager.updateCaption(idList.get(arrayIndex), caption.toString());
     }
-
 
     // UPDATE VIEW AFTER DATABASE ACTIVITY (INSERT, DELETE, QUERY, ETC...)
-    // A LONG METHOD THAT IS VERY IMPORTANT AND MIGHT BE BETTER TO BREAK UP OR MOVE INTO SEPARATE CLASS
     public void databaseToView(String operation, int result, String uri, String description, long date) {
+        updateImage(uri);
+        photoIndex.setText(String.format(getString(R.string.photo_index), arrayIndex + 1, idList.size()));
+        final DateFormat format = DateFormat.getDateInstance(DateFormat.MEDIUM);
+        photoDate.setText(format.format(new Date(date)));
+        photoCaption.setText(description);
+
 
         switch (operation) {
             // CALLED WHEN CHANGING RECORDS (VIA SWIPING)
@@ -424,7 +442,7 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
             case "INSERT_FROM_GALLERY":
                 updateImage(uri);
                 idList.add(result);
-                arrayIndex = idList.size() - 1;
+                arrayIndex = idList.indexOf(result);
                 mapManager.updateMap();
                 break;
 
@@ -433,59 +451,71 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
                 updateImage(uri);
                 idList.add(result);
                 arrayIndex = idList.indexOf(result);
-                Location location = getCurrentLocation();
+                final Location location = getCurrentLocation();
                 if (location == null) {
                     mapManager.updateMap();
                 } else {
-                    dbManager.update(idList.get(arrayIndex), location.getLatitude(), location.getLongitude(), 16.0F, 0, 0, 1, "");
+                    dbManager.updateMap(result, location.getLatitude(), location.getLongitude(), 16.0F, 0, 0, 1);
                     mapManager.updateMap(location.getLatitude(), location.getLongitude(), 16.0F, 0, 0, 1, true);
                 }
-                break;
-
-            // CALLED AFTER SAVING MAP VIEW OF THE CURRENT PHOTO
-            case "UPDATE":
-                String toast = result > 0 ? getResources().getString(R.string.location_saved) :
-                        getResources().getString(R.string.location_not_saved);
-                Toast.makeText(this, toast, Toast.LENGTH_SHORT).show();
                 break;
 
             // CALLED AFTER DELETING A PHOTO
             case "DELETE":
                 idList.remove(arrayIndex);
                 if (arrayIndex == idList.size()) {
-                    arrayIndex = idList.size() - 1;
+                    arrayIndex--;
                 }
+
                 if (arrayIndex == -1) {
                     mapManager.updateMap();
-                    image.setImageBitmap(null);
+                    photo.setImageBitmap(null);
                 } else {
-                    dbManager.query(null, "id=" + idList.get(arrayIndex));
+                    dbManager.updateViewWithId(idList.get(arrayIndex));
                 }
                 break;
         }
-        photoIndex.setText(String.format(getString(R.string.photo_index), arrayIndex + 1, idList.size()));
-        editText.setText(description);
-        final DateFormat format = DateFormat.getDateInstance(DateFormat.MEDIUM);
-        photoDate.setText(format.format(new Date(date)));
+    }
+
+    public void addId(int index) {
+        idList.add(index);
+        arrayIndex = idList.indexOf(index);
+    }
+
+    public void removeId(int index) {
+        idList.remove(index);
+        if (arrayIndex == idList.size()) {
+            arrayIndex--;
+        }
+
+        if (arrayIndex == -1) {
+            mapManager.updateMap();
+            photo.setImageBitmap(null);
+        } else {
+            dbManager.updateViewWithId(idList.get(arrayIndex));
+        }
+    }
+
+    public void mapSaved(int result) {
+        final String toast = result > 0 ? getResources().getString(R.string.location_saved) :
+                getResources().getString(R.string.location_not_saved);
+        Toast.makeText(this, toast, Toast.LENGTH_SHORT).show();
     }
 
     private void updateImage(String uri) {
         // RETRIEVE IMAGE FROM CACHE IF AVAILABLE, OTHERWISE GET FROM CACHE
-        Bitmap bitmap = bitmapCache.get(uri);
+        final Bitmap bitmap = bitmapCache.get(uri);
         if (bitmap == null) {
-            new ImageLoader(this, this, image, true).execute(uri);
+            new ImageLoader(this, this, photo, true).execute(uri);
         } else {
-            image.setImageBitmap(bitmap);
+            photo.setImageBitmap(bitmap);
         }
 
         // GET NEXT PHOTO AND PUT IN CACHE IF NOT ALREADY THERE
         if ((arrayIndex + 1) < idList.size()) {
-            Cursor cursor = dbManager.query(new String[]{"uri"}, "id=" + (arrayIndex + 1));
-            if (cursor.moveToFirst()) {
-                String nextUriString = cursor.getString(0);
-                if (bitmapCache.get(nextUriString) == null) {
-                    new ImageLoader(this, this, image, false).execute(nextUriString);
-                }
+            final String uriString = dbManager.getUriString(idList.get(arrayIndex + 1));
+            if (bitmapCache.get(uriString) == null) {
+                new ImageLoader(this, this, photo, false).execute(uriString);
             }
         }
     }
@@ -496,10 +526,8 @@ public class MainActivity extends AppCompatActivity implements ActivityInterface
     }
 
     /* POSSIBLE FUTURE IMPROVEMENTS
-     * ADD DATE/TIME
      * SEARCH FOR LOCATION DATA ON EXISTING PHOTOS
      * MAKE PHOTO/MAP RATIO CUSTOMIZABLE
-     * SEPARATE MAP NOTES FROM SEARCH TEXT
      */
 }
 
